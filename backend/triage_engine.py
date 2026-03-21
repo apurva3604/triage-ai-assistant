@@ -1,7 +1,8 @@
 import requests
 import json
-
-API_KEY = "FPW4kRH1q41RJgsqq5p1jaROikkxM4kXaPnEREK9"
+from dotenv import load_dotenv
+load_dotenv()
+API_KEY = os.getenv("SCALEDOWN_API_KEY")
 
 URL = "https://api.scaledown.xyz/compress/raw/"
 
