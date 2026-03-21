@@ -1,92 +1,58 @@
-import re
+import logging
+import os
 
-def extract_key_points(query, documents):
+import httpx
 
-    text = " ".join(documents).lower()
-    query = query.lower()
-
-    combined = query + " " + text
-
-    key_points = []
-
-    # 🔹 Core symptom detection
-    if "chest pain" in combined:
-        key_points.append("Chest pain detected")
-
-    if "low blood pressure" in combined or "hypotension" in combined:
-        key_points.append("Low blood pressure detected")
-
-    # 🔹 Medical condition inference
-    if "heart attack" in combined or "cardiac" in combined:
-        key_points.append("Possible cardiac involvement")
-
-    if "shock" in combined:
-        key_points.append("Risk of shock")
-
-    # 🔹 Associated symptoms
-    if "dizziness" in combined or "sweating" in combined:
-        key_points.append("Associated symptoms present")
-
-    # 🔥 Critical condition logic (VERY IMPORTANT)
-    if "chest pain" in combined and (
-        "low blood pressure" in combined or "hypotension" in combined
-    ):
-        key_points.append("High risk: possible cardiac emergency")
-
-    # fallback
-    if not key_points:
-        key_points.append("No critical condition detected")
-
-    return key_points
+SCALEDOWN_API_URL = "https://api.scaledown.xyz/compress/raw/"
+TIMEOUT_SECONDS = 10.0
 
 
-def prune_context(query, documents):
+def prune_context(query: str, patient_history: str) -> dict:
+    """
+    Calls ScaleDown API to prune patient_history using query as the relevance signal.
 
-    # 🔹 Always include query in analysis
-    combined_text = query.lower() + " " + " ".join(documents).lower()
+    Returns:
+        {
+            "pruned_history": str,
+            "input_tokens": int,
+            "output_tokens": int
+        }
+    """
+    api_key = os.environ.get("SCALEDOWN_API_KEY", "")
 
-    key_points = []
+    try:
+        response = httpx.post(
+            SCALEDOWN_API_URL,
+            headers={
+                "x-api-key": api_key,
+                "Content-Type": "application/json",
+            },
+            json={
+                "context": patient_history,
+                "prompt": query,
+                "scaledown": {"rate": "auto"},
+            },
+            timeout=TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        data = response.json()
+        results = data["results"]
+        return {
+            "pruned_history": results["compressed_prompt"],
+            "input_tokens": data["total_original_tokens"],
+            "output_tokens": data["total_compressed_tokens"],
+        }
+    except httpx.TimeoutException as e:
+        logging.warning(f"ScaleDown API timed out: {e}")
+    except httpx.HTTPStatusError as e:
+        logging.warning(f"ScaleDown API returned non-2xx status {e.response.status_code}: {e}")
+    except Exception as e:
+        logging.warning(f"ScaleDown API call failed: {e}")
 
-    # 🫀 CARDIAC
-    if "chest pain" in combined_text:
-        key_points.append("Chest pain detected")
-
-    if "low blood pressure" in combined_text or "hypotension" in combined_text:
-        key_points.append("Low blood pressure detected")
-
-    if "cardiac" in combined_text or "heart" in combined_text:
-        key_points.append("Possible cardiac involvement")
-
-    # 🧠 NEUROLOGICAL
-    if "slurred speech" in combined_text:
-        key_points.append("Slurred speech detected")
-
-    if "weakness" in combined_text or "one side" in combined_text:
-        key_points.append("One-sided weakness detected")
-
-    if "unconscious" in combined_text:
-        key_points.append("Loss of consciousness")
-
-    if "stroke" in combined_text:
-        key_points.append("Possible stroke")
-
-    # 🫁 RESPIRATORY
-    if "breathing" in combined_text or "shortness of breath" in combined_text:
-        key_points.append("Breathing difficulty detected")
-
-    # 🩸 TRAUMA
-    if "bleeding" in combined_text:
-        key_points.append("Active bleeding")
-
-    if "injury" in combined_text:
-        key_points.append("Physical injury detected")
-
-    # ⚠️ CRITICAL
-    if "shock" in combined_text:
-        key_points.append("Risk of shock")
-
-    # 🔥 fallback (IMPORTANT)
-    if not key_points:
-        key_points.append("General symptoms detected")
-
-    return key_points
+    # Fallback: return original patient_history unmodified
+    token_count = len(patient_history.split())
+    return {
+        "pruned_history": patient_history,
+        "input_tokens": token_count,
+        "output_tokens": token_count,
+    }

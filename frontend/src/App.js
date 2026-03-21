@@ -3,6 +3,7 @@ import "./App.css";
 
 function App() {
   const [query, setQuery] = useState("");
+  const [patientHistory, setPatientHistory] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -18,7 +19,7 @@ function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, patient_history: patientHistory }),
       });
 
       const data = await response.json();
@@ -41,6 +42,13 @@ function App() {
           placeholder="Enter patient symptoms (e.g., chest pain, bleeding, breathing difficulty...)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+        />
+
+        <label style={{ display: "block", marginBottom: "4px" }}>Patient History</label>
+        <textarea
+          placeholder="Paste patient history (optional)..."
+          value={patientHistory}
+          onChange={(e) => setPatientHistory(e.target.value)}
         />
 
         <button onClick={handleAnalyze}>
@@ -89,16 +97,16 @@ function App() {
 
         {result && (
           <>
-            <h3>Extracted Signals</h3>
-            <ul>
-              {result.compressed_context.map((c, i) => (
-                <li key={i}>✅ {c}</li>
-              ))}
-            </ul>
+            <h3>Pruned History</h3>
+            <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {result.pruned_history}
+            </pre>
 
             <h3>System Stats</h3>
-            <p>⚡ Compression: High</p>
-            <p>⏱ Latency: ~300ms</p>
+            <p>⚡ Compression: {result.compression_ratio_pct !== null ? `${result.compression_ratio_pct}%` : "N/A"}</p>
+            <p style={{ color: result.reasoning_latency_ms > 500 ? "red" : "inherit" }}>
+              ⏱ Latency: {result.reasoning_latency_ms}ms
+            </p>
           </>
         )}
 
