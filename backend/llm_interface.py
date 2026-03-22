@@ -41,13 +41,23 @@ Pruned patient history:
 Relevant triage protocols:
 {protocols_text}"""
 
-
+"""
 def _strip_markdown_fences(text: str) -> str:
     text = text.strip()
     # Remove ```json ... ``` or ``` ... ```
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
     return text.strip()
+
+"""
+
+
+def _strip_markdown_fences(text: str) -> str:
+    text = text.strip()
+    match = re.search(r'(\{.*\})', text, re.DOTALL)
+    if match:
+        return match.group(1)
+    return text
 
 
 def _parse_response(content: str) -> dict | None:
